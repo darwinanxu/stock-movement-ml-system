@@ -10,6 +10,7 @@ dependencies:
   - fastapi
   - uvicorn
   - joblib
+  - pytorch
   - pip:
       - yfinance
       - mlflow
