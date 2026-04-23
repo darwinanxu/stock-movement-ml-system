@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 import joblib
 import pandas as pd
+
+from src.data_loader import download_data
+from src.features import add_features
 
 DEFAULT_FEATURE_COLUMNS = [
     "return_1d",
@@ -26,6 +30,13 @@ class PredictionArtifacts:
     model: Any
     model_name: str
     feature_columns: list[str]
+
+
+def normalize_ticker(ticker: str) -> str:
+    ticker = ticker.strip().upper()
+    if not ticker:
+        raise ValueError("Ticker is required")
+    return ticker
 
 
 def load_best_model(
@@ -86,7 +97,32 @@ def make_feature_frame(payload: dict, feature_columns: list[str]) -> pd.DataFram
     return pd.DataFrame([row], columns=feature_columns)
 
 
-def predict_one(payload: dict, artifacts: PredictionArtifacts) -> dict:
+def get_latest_feature_payload(
+    ticker: str,
+    feature_columns: list[str],
+    lookback_days: int = 90,
+) -> tuple[dict, str]:
+    ticker = normalize_ticker(ticker)
+    end = date.today() + timedelta(days=1)
+    start = end - timedelta(days=lookback_days)
+
+    df = download_data(ticker=ticker, start=start.isoformat(), end=end.isoformat())
+    if df.empty:
+        raise ValueError(f"No market data found for ticker: {ticker}")
+
+    df = add_features(df)
+    df = df.dropna(subset=feature_columns).copy()
+    if df.empty:
+        raise ValueError(f"Not enough market data to create features for ticker: {ticker}")
+
+    latest_row = df.iloc[-1]
+    payload = {column: latest_row[column] for column in feature_columns}
+    latest_date = str(latest_row["Date"])
+
+    return payload, latest_date
+
+
+def predict_one(payload: dict, artifacts: PredictionArtifacts, ticker: str | None = None) -> dict:
     X = make_feature_frame(payload, artifacts.feature_columns)
 
     pred = int(artifacts.model.predict(X)[0])
@@ -96,9 +132,22 @@ def predict_one(payload: dict, artifacts: PredictionArtifacts) -> dict:
         proba = artifacts.model.predict_proba(X)[0]
         probability = float(proba[1])  # probability of positive class
 
-    return {
+    result = {
         "model_name": artifacts.model_name,
         "prediction": pred,
         "probability": probability,
         "features_used": artifacts.feature_columns,
     }
+
+    if ticker is not None:
+        result["ticker"] = normalize_ticker(ticker)
+
+    return result
+
+
+def predict_ticker(ticker: str, artifacts: PredictionArtifacts) -> dict:
+    ticker = normalize_ticker(ticker)
+    payload, latest_date = get_latest_feature_payload(ticker, artifacts.feature_columns)
+    result = predict_one(payload, artifacts, ticker=ticker)
+    result["latest_data_date"] = latest_date
+    return result

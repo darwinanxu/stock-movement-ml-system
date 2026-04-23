@@ -6,24 +6,22 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from src.predict import load_best_model, predict_one
+from src.predict import load_best_model, predict_ticker
 
 
 class PredictRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    return_1d: float
-    return_5d: float
-    return_10d: float
-    ma_ratio: float
-    volume_change_5d: float
+    ticker: str
 
 
 class PredictResponse(BaseModel):
+    ticker: str
     model_name: str
     prediction: int
     probability: Optional[float]
     features_used: list[str]
+    latest_data_date: str
 
 
 @asynccontextmanager
@@ -47,7 +45,7 @@ def health():
 @app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest):
     try:
-        result = predict_one(request.model_dump(), app.state.artifacts)
+        result = predict_ticker(request.ticker, app.state.artifacts)
         return result
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))

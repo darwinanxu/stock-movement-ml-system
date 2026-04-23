@@ -2,8 +2,6 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import joblib
-import numpy as np
 
 from src.train import prepare_dataset, FEATURE_COLUMNS
 from src.evaluate import evaluate_classifier
@@ -74,7 +72,7 @@ def save_model(model, path="models/torch_model.pt"):
 
 # ====== Main ======
 if __name__ == "__main__":
-    X_train, y_train, X_test, y_test, _, _ = prepare_dataset()
+    X_train, y_train, X_test, y_test = prepare_dataset()
 
     print(f"Train samples: {len(X_train)}")
     print(f"Test samples: {len(X_test)}")

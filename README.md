@@ -8,11 +8,11 @@ An end-to-end machine learning system for predicting short-term stock movement, 
 
 This project includes:
 
-* Data ingestion from Yahoo Finance (SPY)
+* Data ingestion from Yahoo Finance
 * Feature engineering on price and volume signals
 * Model training and selection
 * Model serialization and metadata tracking
-* REST API for prediction using FastAPI
+* REST API for ticker-based prediction using FastAPI
 * Dockerized deployment
 
 ---
@@ -20,7 +20,7 @@ This project includes:
 ## Problem Definition
 
 * Task: Binary classification
-* Goal: Predict whether SPY will increase by more than 1% over the next 5 days
+* Goal: Predict whether a stock will increase by more than 1% over the next 5 days
 
 Label:
 
@@ -52,6 +52,10 @@ stock-movement-ml-system/
 │   ├── train_rf.py
 │   ├── train_torch.py
 │   └── predict.py
+├── tests/
+│   ├── test_features.py
+│   ├── test_labels.py
+│   └── test_predict.py
 ├── models/
 │   ├── *.joblib
 │   └── best_model.json
@@ -103,7 +107,9 @@ python src/train.py
 
 This will:
 
-* Train all models
+* Download training data
+* Build features and labels
+* Train baseline models
 * Evaluate performance
 * Save the best model
 * Write metadata to best_model.json
@@ -136,15 +142,15 @@ http://localhost:8000/docs
 
 **POST /predict**
 
+The customer only provides a stock ticker. The API downloads recent market data,
+builds the required model features internally, and predicts using the latest
+available feature row.
+
 Request:
 
 ```json
 {
-  "return_1d": 0.004,
-  "return_5d": 0.012,
-  "return_10d": 0.018,
-  "ma_ratio": 1.01,
-  "volume_change_5d": 0.08
+  "ticker": "AAPL"
 }
 ```
 
@@ -152,6 +158,7 @@ Response:
 
 ```json
 {
+  "ticker": "AAPL",
   "model_name": "random_forest",
   "prediction": 1,
   "probability": 0.67,
@@ -161,7 +168,8 @@ Response:
     "return_10d",
     "ma_ratio",
     "volume_change_5d"
-  ]
+  ],
+  "latest_data_date": "2024-12-30 00:00:00"
 }
 ```
 
@@ -191,16 +199,36 @@ http://localhost:8000/docs
 
 ## Notes
 
+* The current training configuration uses SPY data as the initial baseline
+* The API accepts any ticker supported by Yahoo Finance and computes features at request time
+* Model quality for non-SPY tickers has not been validated yet
 * Model paths are relative for Docker compatibility
 * Models are included in the image for reproducible serving
 * API loads model once at startup
 
 ---
 
+## Tests
+
+Run:
+
+```
+python -m pytest
+```
+
+Current tests cover:
+
+* Feature generation
+* Label generation
+* Prediction input handling
+* Ticker-based feature creation
+
+---
+
 ## Future Work
 
-* Add tests
 * Add experiment tracking
 * Add CI/CD
 * Improve features
+* Validate model performance across multiple tickers
 * Deploy to cloud
