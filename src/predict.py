@@ -32,11 +32,26 @@ class PredictionArtifacts:
     feature_columns: list[str]
 
 
+REQUIRED_MARKET_DATA_COLUMNS = {"Date", "Close", "Volume"}
+
+
 def normalize_ticker(ticker: str) -> str:
     ticker = ticker.strip().upper()
     if not ticker:
         raise ValueError("Ticker is required")
     return ticker
+
+
+def validate_market_data_columns(df: pd.DataFrame) -> None:
+    missing = REQUIRED_MARKET_DATA_COLUMNS.difference(df.columns)
+    if missing:
+        raise ValueError(f"Downloaded market data is missing required columns: {sorted(missing)}")
+
+
+def format_latest_data_date(value: Any) -> str:
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d")
+    return str(value)
 
 
 def load_best_model(
@@ -110,6 +125,7 @@ def get_latest_feature_payload(
     if df.empty:
         raise ValueError(f"No market data found for ticker: {ticker}")
 
+    validate_market_data_columns(df)
     df = add_features(df)
     df = df.dropna(subset=feature_columns).copy()
     if df.empty:
@@ -117,7 +133,7 @@ def get_latest_feature_payload(
 
     latest_row = df.iloc[-1]
     payload = {column: latest_row[column] for column in feature_columns}
-    latest_date = str(latest_row["Date"])
+    latest_date = format_latest_data_date(latest_row["Date"])
 
     return payload, latest_date
 

@@ -3,11 +3,13 @@ import pytest
 
 from src.predict import (
     PredictionArtifacts,
+    format_latest_data_date,
     get_latest_feature_payload,
     make_feature_frame,
     normalize_ticker,
     predict_one,
     predict_ticker,
+    validate_market_data_columns,
 )
 
 
@@ -78,11 +80,22 @@ def test_get_latest_feature_payload_downloads_data_and_builds_features(monkeypat
         ["return_1d", "return_5d", "return_10d", "ma_ratio", "volume_change_5d"],
     )
 
-    assert latest_date == "2024-01-11 00:00:00"
+    assert latest_date == "2024-01-11"
     assert payload["return_1d"] == pytest.approx(1 / 109)
     assert payload["return_5d"] == pytest.approx(5 / 105)
     assert payload["return_10d"] == pytest.approx(0.1)
     assert payload["volume_change_5d"] == pytest.approx(1 / 3)
+
+
+def test_validate_market_data_columns_rejects_missing_columns():
+    df = pd.DataFrame({"Date": ["2024-01-01"], "Close": [100]})
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        validate_market_data_columns(df)
+
+
+def test_format_latest_data_date_returns_iso_date_for_timestamps():
+    assert format_latest_data_date(pd.Timestamp("2024-01-31 15:30:00")) == "2024-01-31"
 
 
 def test_predict_ticker_returns_ticker_and_latest_data_date(monkeypatch):
