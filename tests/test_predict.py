@@ -1,3 +1,6 @@
+import json
+
+import joblib
 import pandas as pd
 import pytest
 
@@ -5,11 +8,14 @@ from src.predict import (
     PredictionArtifacts,
     format_latest_data_date,
     get_latest_feature_payload,
+    load_best_model,
     make_feature_frame,
     normalize_ticker,
     predict_one,
     predict_ticker,
+    validate_feature_columns,
     validate_market_data_columns,
+    validate_model_metadata,
 )
 
 
@@ -26,6 +32,11 @@ def test_make_feature_frame_preserves_feature_order_and_casts_values():
 def test_make_feature_frame_rejects_missing_features():
     with pytest.raises(ValueError, match="Missing required features"):
         make_feature_frame({"a": 1}, ["a", "b"])
+
+
+def test_make_feature_frame_rejects_empty_feature_columns():
+    with pytest.raises(ValueError, match="Feature columns cannot be empty"):
+        make_feature_frame({"a": 1}, [])
 
 
 def test_predict_one_returns_prediction_with_probability():
@@ -94,8 +105,52 @@ def test_validate_market_data_columns_rejects_missing_columns():
         validate_market_data_columns(df)
 
 
+def test_validate_model_metadata_rejects_missing_fields():
+    with pytest.raises(ValueError, match="missing required fields"):
+        validate_model_metadata({"model_name": "random_forest"})
+
+
+def test_validate_feature_columns_rejects_empty_list():
+    with pytest.raises(ValueError, match="Feature columns cannot be empty"):
+        validate_feature_columns([])
+
+
 def test_format_latest_data_date_returns_iso_date_for_timestamps():
     assert format_latest_data_date(pd.Timestamp("2024-01-31 15:30:00")) == "2024-01-31"
+
+
+def test_load_best_model_rejects_metadata_without_model_path(tmp_path):
+    metadata_path = tmp_path / "best_model.json"
+    metadata_path.write_text(json.dumps({"model_name": "random_forest"}))
+
+    with pytest.raises(ValueError, match="missing required fields"):
+        load_best_model(metadata_path)
+
+
+def test_load_best_model_uses_default_feature_columns_when_missing(tmp_path):
+    model_path = tmp_path / "model.joblib"
+    metadata_path = tmp_path / "best_model.json"
+
+    joblib.dump({"hello": "world"}, model_path)
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "model_name": "dummy",
+                "model_path": str(model_path),
+            }
+        )
+    )
+
+    artifacts = load_best_model(metadata_path)
+
+    assert artifacts.model_name == "dummy"
+    assert artifacts.feature_columns == [
+        "return_1d",
+        "return_5d",
+        "return_10d",
+        "ma_ratio",
+        "volume_change_5d",
+    ]
 
 
 def test_predict_ticker_returns_ticker_and_latest_data_date(monkeypatch):

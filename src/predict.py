@@ -33,6 +33,7 @@ class PredictionArtifacts:
 
 
 REQUIRED_MARKET_DATA_COLUMNS = {"Date", "Close", "Volume"}
+REQUIRED_METADATA_FIELDS = {"model_name", "model_path"}
 
 
 def normalize_ticker(ticker: str) -> str:
@@ -46,6 +47,17 @@ def validate_market_data_columns(df: pd.DataFrame) -> None:
     missing = REQUIRED_MARKET_DATA_COLUMNS.difference(df.columns)
     if missing:
         raise ValueError(f"Downloaded market data is missing required columns: {sorted(missing)}")
+
+
+def validate_model_metadata(meta: dict[str, Any]) -> None:
+    missing = REQUIRED_METADATA_FIELDS.difference(meta)
+    if missing:
+        raise ValueError(f"Model metadata is missing required fields: {sorted(missing)}")
+
+
+def validate_feature_columns(feature_columns: list[str]) -> None:
+    if not feature_columns:
+        raise ValueError("Feature columns cannot be empty")
 
 
 def format_latest_data_date(value: Any) -> str:
@@ -84,9 +96,12 @@ def load_best_model(
     with open(metadata_path, "r") as f:
         meta = json.load(f)
 
+    validate_model_metadata(meta)
+
     model_path = Path(meta["model_path"])
     model_name = meta["model_name"]
     feature_columns = meta.get("feature_columns", DEFAULT_FEATURE_COLUMNS)
+    validate_feature_columns(feature_columns)
 
     if not model_path.is_absolute():
         model_path = PROJECT_ROOT / model_path
@@ -104,6 +119,7 @@ def load_best_model(
 
 
 def make_feature_frame(payload: dict, feature_columns: list[str]) -> pd.DataFrame:
+    validate_feature_columns(feature_columns)
     missing = [col for col in feature_columns if col not in payload]
     if missing:
         raise ValueError(f"Missing required features: {missing}")
